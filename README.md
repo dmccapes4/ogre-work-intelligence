@@ -91,9 +91,13 @@ bundled by `imageio-ffmpeg`).
 # no window at all — render + record straight to file (works over SSH)
 ./run.sh --headless --record demo.mov --record-seconds 30
 
-# narrated explainer: timed subtitles walk through every phase (~2.5 min)
-./run.sh --headless --subtitles --record demo.mov --record-seconds 146
+# narrated explainer with an animated Lorenz-attractor intro (~2.7 min)
+./run.sh --headless --subtitles --intro 15 --record demo.mov --record-seconds 161
 ```
+
+`--intro N` opens with an N-second full-screen animated Lorenz attractor — the
+real butterfly with comet tracers sweeping both wings (green left = KEEP, red
+right = EVICT) — before cutting to the live dashboard.
 
 `--subtitles` (or the `T` key) overlays a timed narration track that explains
 each phase — ingestion, OGrE enrichment, decay/attractors, Lorenz classification,

@@ -70,6 +70,12 @@ def blend(fg, bg, a: float):
     )
 
 
+# Narration for the animated Lorenz intro scene, keyed to seconds into the intro.
+INTRO_SCRIPT: List[Tuple[float, float, str]] = [
+    (0.5, 7.5, "The engine behind it all: the Lorenz attractor \u2014 three coupled equations whose solution never repeats, yet never escapes."),
+    (7.5, 15.0, "Its two wings are the geometry OGrE borrows for memory: a trajectory that settles into the left wing is KEEP, the right wing is EVICT."),
+]
+
 # Timed narration, keyed to wall-clock seconds since launch. Walks through the
 # whole system in order so the recording is self-explanatory.
 SUBTITLE_SCRIPT: List[Tuple[float, float, str]] = [
@@ -142,7 +148,8 @@ class Recorder:
 class SimApp:
     def __init__(self, model: Optional[str] = None, seed: int = 7,
                  record_path: Optional[str] = None, record_seconds: float = 0.0,
-                 record_fps: int = 30, subtitles: bool = False) -> None:
+                 record_fps: int = 30, subtitles: bool = False,
+                 intro: float = 0.0) -> None:
         pygame.init()
         pygame.display.set_caption("OGrE — Opportunistic Graph-enrichment Work Intelligence")
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -185,6 +192,7 @@ class SimApp:
         self.show_help = not subtitles      # help and subtitles share the lower area
         self.subtitles_on = subtitles
         self._wall_elapsed = 0.0            # real seconds since launch (subtitle clock)
+        self.intro_seconds = intro          # full-screen animated Lorenz attractor intro
         self.batch_counter = 0
         self.max_nodes = 72       # working-set budget for the stable graph
         self._cap_spill_accum = 0
@@ -213,6 +221,8 @@ class SimApp:
 
         # precompute a faint Lorenz butterfly backdrop
         self._butterfly = self._precompute_butterfly()
+        # high-resolution 3D trajectory for the animated intro scene
+        self._lorenz_hi = self._precompute_lorenz_hi()
 
         # console
         self.console: Deque[Tuple[str, Tuple[int, int, int]]] = deque(maxlen=8)
@@ -264,6 +274,12 @@ class SimApp:
         from provenance_engine import integrate_portal
         traj = integrate_portal(0.1, 0.0, 0.0, rho=28.0, t_max=40.0, dt=0.01)
         return [(p[0], p[2]) for p in traj[400:]]   # (x, z), skip transient
+
+    def _precompute_lorenz_hi(self) -> List[Tuple[float, float, float]]:
+        """A long, dense 3D Lorenz trajectory for the rotating intro butterfly."""
+        from provenance_engine import integrate_portal
+        traj = integrate_portal(0.1, 0.0, 0.0, rho=28.0, t_max=75.0, dt=0.01)
+        return [tuple(p) for p in traj[300:]]       # skip the transient swing-in
 
     # ---- ingestion ------------------------------------------------------
     def _ingest_one(self) -> None:
@@ -456,6 +472,10 @@ class SimApp:
             self.screen.blit(self.f_h.render(title, True, TEXT), (rect.x + 12, rect.y + 8))
 
     def draw(self) -> None:
+        if self._wall_elapsed < self.intro_seconds:
+            self._draw_lorenz_scene()
+            pygame.display.flip()
+            return
         self.screen.fill(BG)
         self._draw_topbar()
         self._draw_graph()
@@ -735,36 +755,102 @@ class SimApp:
         return lines
 
     def _active_subtitle(self) -> Optional[str]:
-        t = self._wall_elapsed
+        t = self._wall_elapsed - self.intro_seconds   # dashboard clock starts after intro
         for start, end, text in SUBTITLE_SCRIPT:
             if start <= t < end:
                 return text
         return None
 
-    def _draw_subtitles(self) -> None:
-        text = self._active_subtitle()
-        if not text:
-            return
-        max_w = min(self.graph_rect.width - 80, 960)
+    def _blit_caption(self, text: str, centerx: int, bottom_y: int, max_w: int) -> None:
         lines = self._wrap(text, self.f_sub, max_w)
         line_h = self.f_sub.get_height() + 3
         pad_x, pad_y = 18, 12
         box_w = max(self.f_sub.size(ln)[0] for ln in lines) + pad_x * 2
         box_h = line_h * len(lines) + pad_y * 2
-        bx = self.graph_rect.centerx - box_w // 2
-        by = self.graph_rect.bottom - box_h - 16
+        bx = centerx - box_w // 2
+        by = bottom_y - box_h
 
         s = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
         s.fill((8, 10, 16, 232))
         self.screen.blit(s, (bx, by))
         pygame.draw.rect(self.screen, BORDER, pygame.Rect(bx, by, box_w, box_h), 1, border_radius=8)
-        # accent bar on the left edge
         pygame.draw.rect(self.screen, ACCENT, pygame.Rect(bx, by, 4, box_h),
                          border_top_left_radius=8, border_bottom_left_radius=8)
         for i, ln in enumerate(lines):
             surf = self.f_sub.render(ln, True, (240, 244, 252))
-            self.screen.blit(surf, (self.graph_rect.centerx - surf.get_width() // 2,
-                                    by + pad_y + i * line_h))
+            self.screen.blit(surf, (centerx - surf.get_width() // 2, by + pad_y + i * line_h))
+
+    def _draw_subtitles(self) -> None:
+        text = self._active_subtitle()
+        if text:
+            self._blit_caption(text, self.graph_rect.centerx,
+                               self.graph_rect.bottom - 16,
+                               min(self.graph_rect.width - 80, 960))
+
+    # ---- animated Lorenz intro scene ------------------------------------
+    def _draw_lorenz_scene(self) -> None:
+        self.screen.fill(BG)
+        cx, cy = WIDTH // 2, HEIGHT // 2 - 10
+        scale = 11.5
+        theta = self._wall_elapsed * 0.45            # slow rotation about the z-axis
+        ct, st = math.cos(theta), math.sin(theta)
+        pts = self._lorenz_hi
+        n = len(pts)
+
+        def project(p):
+            x, y, z = p
+            xr = x * ct - y * st                      # rotate (x,y) -> 3D parallax
+            return (cx + xr * scale, cy - (z - 25.0) * scale)
+
+        # faint full attractor path, colored by wing
+        screen_pts = [project(p) for p in pts]
+        step = 2
+        for i in range(0, n - step, step):
+            wx = pts[i][0]
+            base = CLASS_COLOR["KEEP"] if wx < 0 else CLASS_COLOR["EVICT"]
+            pygame.draw.line(self.screen, blend(base, BG, 0.22), screen_pts[i], screen_pts[i + step], 1)
+
+        # bright comet tracers sweeping along the trajectory
+        speed_pts = 900                               # trajectory points advanced per second
+        for offset in (0, n // 3, 2 * n // 3):
+            head = (int(self._wall_elapsed * speed_pts) + offset) % n
+            trail = 90
+            for j in range(trail):
+                idx = (head - j) % n
+                if idx + 1 >= n:
+                    continue
+                a = (1.0 - j / trail)
+                wx = pts[idx][0]
+                base = CLASS_COLOR["KEEP"] if wx < 0 else CLASS_COLOR["EVICT"]
+                col = blend((255, 255, 255), base, 0.55 * a)
+                pygame.draw.line(self.screen, blend(col, BG, 0.25 + 0.75 * a),
+                                 screen_pts[idx], screen_pts[(idx + 1) % n], 2 if a > 0.4 else 1)
+            hx, hy = screen_pts[head]
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(hx), int(hy)), 4)
+
+        # title + equations
+        title = self.f_title.render("THE LORENZ ATTRACTOR", True, TEXT)
+        self.screen.blit(title, (cx - title.get_width() // 2, 40))
+        sub = self.f.render("the chaotic core of OGrE's garbage collector", True, MUTED)
+        self.screen.blit(sub, (cx - sub.get_width() // 2, 70))
+        eqs = ["dx/dt = \u03c3 (y \u2212 x)", "dy/dt = x (\u03c1 \u2212 z) \u2212 y",
+               "dz/dt = x y \u2212 \u03b2 z", "\u03c3=10   \u03c1=28   \u03b2=8/3"]
+        ey = 100
+        for i, e in enumerate(eqs):
+            col = ACCENT if i == len(eqs) - 1 else TEXT
+            surf = self.f_mono.render(e, True, col)
+            self.screen.blit(surf, (40, ey + i * 18))
+        # wing labels
+        self.screen.blit(self.f_h.render("LEFT WING \u2192 KEEP", True, CLASS_COLOR["KEEP"]),
+                         (60, HEIGHT - 90))
+        rt = self.f_h.render("RIGHT WING \u2192 EVICT", True, CLASS_COLOR["EVICT"])
+        self.screen.blit(rt, (WIDTH - rt.get_width() - 60, HEIGHT - 90))
+
+        if self.subtitles_on:
+            for start, end, text in INTRO_SCRIPT:
+                if start <= self._wall_elapsed < end:
+                    self._blit_caption(text, cx, HEIGHT - 30, 1000)
+                    break
 
     # ---- events ---------------------------------------------------------
     def handle_events(self) -> None:
@@ -831,6 +917,8 @@ def main() -> None:
                         help="run without a visible window (still records video)")
     parser.add_argument("--subtitles", action="store_true",
                         help="show timed narration captions explaining each phase")
+    parser.add_argument("--intro", type=float, default=0.0,
+                        help="seconds of animated full-screen Lorenz attractor intro")
     args = parser.parse_args()
 
     if args.headless:
@@ -840,7 +928,7 @@ def main() -> None:
     SimApp(
         model=args.model, seed=args.seed,
         record_path=args.record, record_seconds=args.record_seconds,
-        record_fps=args.record_fps, subtitles=args.subtitles,
+        record_fps=args.record_fps, subtitles=args.subtitles, intro=args.intro,
     ).run()
 
 
