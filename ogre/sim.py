@@ -72,8 +72,9 @@ def blend(fg, bg, a: float):
 
 # Narration for the animated Lorenz intro scene, keyed to seconds into the intro.
 INTRO_SCRIPT: List[Tuple[float, float, str]] = [
-    (0.5, 7.5, "The engine behind it all: the Lorenz attractor \u2014 three coupled equations whose solution never repeats, yet never escapes."),
-    (7.5, 15.0, "Its two wings are the geometry OGrE borrows for memory: a trajectory that settles into the left wing is KEEP, the right wing is EVICT."),
+    (0.5, 6.5, "Meet the Lorenz attractor \u2014 just three short equations (top-left). That is the entire rule."),
+    (6.5, 13.0, "Yet the solution is chaos: one point traces these two wings forever \u2014 never repeating, never escaping."),
+    (13.0, 19.5, "OGrE's trick is to let chaos decide what to remember. Left wing \u2192 KEEP, right wing \u2192 EVICT. No hand-tuned thresholds \u2014 just the geometry."),
 ]
 
 # Timed narration, keyed to wall-clock seconds since launch. Walks through the
@@ -85,8 +86,8 @@ SUBTITLE_SCRIPT: List[Tuple[float, float, str]] = [
     (32.0, 43.0, "The five dimensions: STRUCTURAL, CONCEPTUAL, TEMPORAL, CO-OCCURRENCE, CO-VARIANCE. Edge color = type, thickness = strength."),
     (43.0, 54.0, "Every node has a vitality that decays over time \u2014 but vitality propagates along edges, so connected work reinforces itself."),
     (54.0, 65.0, "Densely re-referenced clusters hold each other up and become stable attractors: the graph's long-term memory (glowing green)."),
-    (65.0, 77.0, "Periodically a Lorenz-attractor GC maps each node into a chaotic system (top-right) and integrates its trajectory with RK4."),
-    (77.0, 89.0, "Which attractor wing the trajectory settles into decides its fate \u2014 left wing: KEEP, right wing: EVICT, the boundary: REVIEW."),
+    (65.0, 77.0, "Now the payoff \u2014 that butterfly is the garbage collector. Each node's connectivity, connascence and vitality become a point dropped into the attractor (top-right)."),
+    (77.0, 89.0, "RK4 integrates its trajectory and we watch which wing it settles into: left wing KEEPs it, right wing EVICTs it, the chaotic boundary flags REVIEW. Chaos casts the deciding vote."),
     (89.0, 100.0, "Evicted items leave the graph and drop into a 100-slot FIFO eviction log. Load-bearing items are spared and downgraded to REVIEW."),
     (100.0, 111.0, "When the log fills, the oldest evictions fall off the tail \u2014 forgotten forever."),
     (111.0, 123.0, "An agent searching the past checks the live graph first, then the eviction log..."),
