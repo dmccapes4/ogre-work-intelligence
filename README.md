@@ -99,6 +99,21 @@ bundled by `imageio-ffmpeg`).
 real butterfly with comet tracers sweeping both wings (green left = KEEP, red
 right = EVICT) — before cutting to the live dashboard.
 
+### Voice narration (optional)
+
+`build_narration.py` speaks the subtitle track with a local [Piper](https://github.com/OHF-Voice/piper1-gpl)
+neural voice (offline) and lays it on a timeline matching the captions. It's a
+neutral narrator reading the on-screen text — not an impersonation of anyone.
+
+```bash
+pip install piper-tts
+# download a voice (e.g. en_US-ryan-high) into voices/
+python build_narration.py --intro 20 --duration 166 --out narration.wav
+# mux into the recording
+ffmpeg -i ogre-demo.mov -i narration.wav -map 0:v -map 1:a \
+       -c:v libx264 -crf 26 -pix_fmt yuv420p -c:a aac -movflags +faststart out.mp4
+```
+
 `--subtitles` (or the `T` key) overlays a timed narration track that explains
 each phase — ingestion, OGrE enrichment, decay/attractors, Lorenz classification,
 eviction, forgetting, and resurrection — keyed to wall-clock time.

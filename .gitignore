@@ -12,8 +12,12 @@ venv/
 *.mov
 *.mp4
 *.gif
+*.wav
 ogre-capture-*
 demo_frame.png
+
+# Piper TTS voice models (downloaded on demand)
+voices/
 
 # OS / editor
 .DS_Store
