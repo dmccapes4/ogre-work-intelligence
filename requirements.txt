@@ -1,0 +1,6 @@
+pygame>=2.6
+provenance-engine>=0.2
+requests>=2.31
+imageio>=2.37
+imageio-ffmpeg>=0.5
+numpy>=1.26

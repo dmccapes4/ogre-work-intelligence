@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtualenv
+.venv/
+venv/
+
+# Recorded captures
+*.mov
+*.mp4
+*.gif
+ogre-capture-*
+demo_frame.png
+
+# OS / editor
+.DS_Store
+*.swp
