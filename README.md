@@ -67,6 +67,7 @@ after several consecutive failures, and re-probes to recover.
 | `G` | run a Lorenz GC pass now |
 | `S` | search the past (graph → eviction log, resurrects on hit) |
 | `R` | start/stop recording a `.mov` |
+| `T` | toggle narration subtitles |
 | `P` | pause | 
 | `+` / `-` | simulation speed |
 | `H` | toggle help overlay |
@@ -89,7 +90,14 @@ bundled by `imageio-ffmpeg`).
 
 # no window at all — render + record straight to file (works over SSH)
 ./run.sh --headless --record demo.mov --record-seconds 30
+
+# narrated explainer: timed subtitles walk through every phase (~2.5 min)
+./run.sh --headless --subtitles --record demo.mov --record-seconds 146
 ```
+
+`--subtitles` (or the `T` key) overlays a timed narration track that explains
+each phase — ingestion, OGrE enrichment, decay/attractors, Lorenz classification,
+eviction, forgetting, and resurrection — keyed to wall-clock time.
 
 Frames are sampled at a fixed wall-clock `--record-fps` (default 30), so the
 output plays back in real time even if encoding slows the loop. Output is H.264

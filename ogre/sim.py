@@ -70,6 +70,25 @@ def blend(fg, bg, a: float):
     )
 
 
+# Timed narration, keyed to wall-clock seconds since launch. Walks through the
+# whole system in order so the recording is self-explanatory.
+SUBTITLE_SCRIPT: List[Tuple[float, float, str]] = [
+    (1.0, 11.0, "OGrE: a live simulation of graph-based work intelligence. A local agent ingests work items into a knowledge graph."),
+    (11.0, 21.0, "Each item is enriched by a local Ollama model (qwen2.5-coder 14B) that extracts its concepts, importance, and dependencies."),
+    (21.0, 32.0, "Opportunistic Graph enrichment (OGrE) then weaves 5D-connascence edges between related items."),
+    (32.0, 43.0, "The five dimensions: STRUCTURAL, CONCEPTUAL, TEMPORAL, CO-OCCURRENCE, CO-VARIANCE. Edge color = type, thickness = strength."),
+    (43.0, 54.0, "Every node has a vitality that decays over time \u2014 but vitality propagates along edges, so connected work reinforces itself."),
+    (54.0, 65.0, "Densely re-referenced clusters hold each other up and become stable attractors: the graph's long-term memory (glowing green)."),
+    (65.0, 77.0, "Periodically a Lorenz-attractor GC maps each node into a chaotic system (top-right) and integrates its trajectory with RK4."),
+    (77.0, 89.0, "Which attractor wing the trajectory settles into decides its fate \u2014 left wing: KEEP, right wing: EVICT, the boundary: REVIEW."),
+    (89.0, 100.0, "Evicted items leave the graph and drop into a 100-slot FIFO eviction log. Load-bearing items are spared and downgraded to REVIEW."),
+    (100.0, 111.0, "When the log fills, the oldest evictions fall off the tail \u2014 forgotten forever."),
+    (111.0, 123.0, "An agent searching the past checks the live graph first, then the eviction log..."),
+    (123.0, 135.0, "...and resurrects any evicted item that gets referenced again, pulling it back into the graph (blue ring)."),
+    (135.0, 146.0, "Ingest \u2192 enrich \u2192 decay \u2192 classify \u2192 evict \u2192 forget \u2192 resurrect. A working memory governed by the geometry of chaos."),
+]
+
+
 class Recorder:
     """Pipes rendered pygame frames into a .mov via imageio's bundled ffmpeg.
 
@@ -123,7 +142,7 @@ class Recorder:
 class SimApp:
     def __init__(self, model: Optional[str] = None, seed: int = 7,
                  record_path: Optional[str] = None, record_seconds: float = 0.0,
-                 record_fps: int = 30) -> None:
+                 record_fps: int = 30, subtitles: bool = False) -> None:
         pygame.init()
         pygame.display.set_caption("OGrE — Opportunistic Graph-enrichment Work Intelligence")
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -136,6 +155,7 @@ class SimApp:
         self.f = pygame.font.SysFont("dejavusans", 13)
         self.f_sm = pygame.font.SysFont("dejavusans", 11)
         self.f_mono = pygame.font.SysFont("dejavusansmono", 12)
+        self.f_sub = pygame.font.SysFont("dejavusans", 17, bold=True)
 
         # domain objects
         self.graph = WorkGraph()
@@ -162,7 +182,9 @@ class SimApp:
         self.paused = False
         self.speed = 1.0
         self.auto_ingest = True
-        self.show_help = True
+        self.show_help = not subtitles      # help and subtitles share the lower area
+        self.subtitles_on = subtitles
+        self._wall_elapsed = 0.0            # real seconds since launch (subtitle clock)
         self.batch_counter = 0
         self.max_nodes = 72       # working-set budget for the stable graph
         self._cap_spill_accum = 0
@@ -331,6 +353,7 @@ class SimApp:
 
     # ---- update ---------------------------------------------------------
     def update(self, dt_real: float) -> None:
+        self._wall_elapsed += dt_real
         self._collect_enriched()
         # Hard working-set bound every frame (the logged narrative fires on GC).
         spilled = self.gc.enforce_capacity(self.graph, self.max_nodes)
@@ -442,6 +465,8 @@ class SimApp:
         self._draw_console()
         if self.show_help:
             self._draw_help()
+        if self.subtitles_on:
+            self._draw_subtitles()
         pygame.display.flip()
 
     def _draw_topbar(self) -> None:
@@ -683,7 +708,7 @@ class SimApp:
     def _draw_help(self) -> None:
         lines = [
             "SPACE ingest   B batch   A auto   G run GC   S search past",
-            "R record .mov   P pause   +/- speed   H hide help   ESC quit",
+            "R record .mov   T subtitles   P pause   +/- speed   H hide help   ESC quit",
         ]
         w = 560
         box = pygame.Rect(self.graph_rect.x + 12, self.graph_rect.bottom - 48, w, 38)
@@ -693,6 +718,53 @@ class SimApp:
         pygame.draw.rect(self.screen, BORDER, box, 1, border_radius=6)
         for i, ln in enumerate(lines):
             self.screen.blit(self.f_sm.render(ln, True, TEXT), (box.x + 10, box.y + 5 + i * 16))
+
+    @staticmethod
+    def _wrap(text: str, font: "pygame.font.Font", max_w: int) -> List[str]:
+        lines: List[str] = []
+        cur = ""
+        for word in text.split():
+            trial = (cur + " " + word).strip()
+            if font.size(trial)[0] <= max_w or not cur:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = word
+        if cur:
+            lines.append(cur)
+        return lines
+
+    def _active_subtitle(self) -> Optional[str]:
+        t = self._wall_elapsed
+        for start, end, text in SUBTITLE_SCRIPT:
+            if start <= t < end:
+                return text
+        return None
+
+    def _draw_subtitles(self) -> None:
+        text = self._active_subtitle()
+        if not text:
+            return
+        max_w = min(self.graph_rect.width - 80, 960)
+        lines = self._wrap(text, self.f_sub, max_w)
+        line_h = self.f_sub.get_height() + 3
+        pad_x, pad_y = 18, 12
+        box_w = max(self.f_sub.size(ln)[0] for ln in lines) + pad_x * 2
+        box_h = line_h * len(lines) + pad_y * 2
+        bx = self.graph_rect.centerx - box_w // 2
+        by = self.graph_rect.bottom - box_h - 16
+
+        s = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        s.fill((8, 10, 16, 232))
+        self.screen.blit(s, (bx, by))
+        pygame.draw.rect(self.screen, BORDER, pygame.Rect(bx, by, box_w, box_h), 1, border_radius=8)
+        # accent bar on the left edge
+        pygame.draw.rect(self.screen, ACCENT, pygame.Rect(bx, by, 4, box_h),
+                         border_top_left_radius=8, border_bottom_left_radius=8)
+        for i, ln in enumerate(lines):
+            surf = self.f_sub.render(ln, True, (240, 244, 252))
+            self.screen.blit(surf, (self.graph_rect.centerx - surf.get_width() // 2,
+                                    by + pad_y + i * line_h))
 
     # ---- events ---------------------------------------------------------
     def handle_events(self) -> None:
@@ -719,6 +791,8 @@ class SimApp:
                     self.paused = not self.paused
                 elif k == pygame.K_h:
                     self.show_help = not self.show_help
+                elif k == pygame.K_t:
+                    self.subtitles_on = not self.subtitles_on
                 elif k == pygame.K_r:
                     self.toggle_recording()
                 elif k in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
@@ -755,6 +829,8 @@ def main() -> None:
     parser.add_argument("--record-fps", type=int, default=30, help="output video fps")
     parser.add_argument("--headless", action="store_true",
                         help="run without a visible window (still records video)")
+    parser.add_argument("--subtitles", action="store_true",
+                        help="show timed narration captions explaining each phase")
     args = parser.parse_args()
 
     if args.headless:
@@ -764,7 +840,7 @@ def main() -> None:
     SimApp(
         model=args.model, seed=args.seed,
         record_path=args.record, record_seconds=args.record_seconds,
-        record_fps=args.record_fps,
+        record_fps=args.record_fps, subtitles=args.subtitles,
     ).run()
 
 
