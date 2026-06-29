@@ -107,8 +107,10 @@ neutral narrator reading the on-screen text — not an impersonation of anyone.
 
 ```bash
 pip install piper-tts
-# download a voice (e.g. en_US-ryan-high) into voices/
-python build_narration.py --intro 20 --duration 166 --out narration.wav
+# download a voice into voices/ (the published demo uses the generic
+# en_US-hfc_female-medium voice; en_US-ryan-high is a male alternative)
+python build_narration.py --voice voices/en_US-hfc_female-medium.onnx \
+    --intro 20 --duration 166 --out narration.wav
 # mux into the recording
 ffmpeg -i ogre-demo.mov -i narration.wav -map 0:v -map 1:a \
        -c:v libx264 -crf 26 -pix_fmt yuv420p -c:a aac -movflags +faststart out.mp4

@@ -5,7 +5,7 @@ This is plain offline text-to-speech of the same subtitles shown in the video
 (a neutral narrator voice) -- not an impersonation of any real person.
 
 Usage:
-    python build_narration.py --voice voices/en_US-ryan-high.onnx \
+    python build_narration.py --voice voices/en_US-hfc_female-medium.onnx \
         --intro 20 --duration 166 --out narration.wav
 """
 
@@ -58,7 +58,7 @@ def synth(voice: PiperVoice, text: str, length_scale: float = 1.0) -> np.ndarray
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--voice", default="voices/en_US-ryan-high.onnx")
+    ap.add_argument("--voice", default="voices/en_US-hfc_female-medium.onnx")
     ap.add_argument("--intro", type=float, default=20.0)
     ap.add_argument("--duration", type=float, default=166.0)
     ap.add_argument("--out", default="narration.wav")
